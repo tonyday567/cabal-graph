@@ -1,0 +1,14 @@
+/.stack-work/
+/dist-newstyle/
+stack.yaml.lock
+**/.DS_Store
+cabal.project.local*
+/.hie/
+.ghc.environment.*
+/.hkgr/
+/xyzzy/
+/minimal/
+/other/new.cabal
+/other/old.cabal
+/simple/
+/checklist.org

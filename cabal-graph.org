@@ -1,0 +1,429 @@
+* cabal-graph
+
+[[https://hackage.haskell.org/package/cabal-fix][https://img.shields.io/hackage/v/cabal-graph.svg]]
+[[https://github.com/tonyday567/cabal-fix/actions?query=workflow%3Ahaskell-ci][https://github.com/tonyday567/cabal-graph/workflows/haskell-ci/badge.svg]]
+
+~cabal-graph~ contains functions to extract, explore and graph cabal files listed in your hackage tar index file.
+
+The sections below are some exploration notes.
+
+* imports
+#+begin_src haskell-ng :results output :exports both
+:r
+:set -Wno-type-defaults
+:set -Wno-name-shadowing
+:set -XOverloadedLabels
+:set -XOverloadedStrings
+:set -Wno-incomplete-uni-patterns
+import Algebra.Graph
+import Algebra.Graph.ToGraph qualified as ToGraph
+import CabalFix
+import CabalGraph
+import Codec.Archive.Tar qualified as Tar
+import Control.Monad
+import Data.Bifunctor
+import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as C
+import Data.ByteString.Lazy qualified as BSL
+import Data.Char
+import Data.Either
+import Data.Function
+import Data.List qualified as List
+import Data.Map.Strict qualified as Map
+import Data.Ord
+import Data.Set qualified as Set
+import DotParse
+import FlatParse.Basic qualified as FP
+import System.Directory
+#+end_src
+
+#+RESULTS:
+: Ok, one module reloaded.
+
+#+begin_src haskell-ng :results output
+es <- tarEntries
+cs = es & cabals
+lcs = cs & latestCabals
+length cs
+length lcs
+cfs = latestCabalFields defaultConfig lcs
+Map.size cfs
+#+end_src
+
+#+RESULTS:
+: 145265
+: 18315
+: 18309
+
+
+#+begin_src haskell-ng :results output
+vpp = (fromIntegral (length cs)) / fromIntegral (length lcs)
+vpp
+#+end_src
+
+#+RESULTS:
+: 7.931476931476931
+
+* filename counts
+
+#+begin_src haskell-ng :results output
+fs <- tarEntries & fmap (tarContent >>> fmap fst)
+length fs
+#+end_src
+
+#+begin_src haskell-ng :results output
+fs & length
+fs & filter (isPreferredVersion >>> not) & length
+fs & filter (isPreferredVersion >>> not) & filter (isPackageJson >>> not) & length
+-- fs & filter (isPreferredVersion >>> not) & filter (isPackageJson >>> not) & Set.fromList & Set.toList & length
+fs & filter (isPreferredVersion >>> not) & filter (isPackageJson >>> not) & Set.fromList & Set.size
+fs & filter (isPreferredVersion >>> not) & filter isPackageJson & length
+-- fs & filter (isPreferredVersion >>> not) & filter (isPackageJson >>> not)
+#+end_src
+
+#+RESULTS:
+: 339002
+: 335399
+: 190134
+: 145265
+: 145265
+
+https://github.com/haskell/hackage-security/blob/master/README.md
+
+* cabal files
+
+** Is every filenameFN prefix the same as nameFN?
+
+
+#+begin_src haskell-ng :results output
+cs' = cs & fmap (fst >>> FP.strToUtf8 >>> runParser_ filenameP)
+cs' & fmap (\x -> C.stripSuffix ".cabal" (filenameFN x)) & filter isNothing & take 5
+#+end_src
+
+#+RESULTS:
+: []
+
+all filenameFN s are conformant
+
+yes
+
+#+begin_src haskell-ng :results output
+cs' = cs & fmap (fst >>> FP.strToUtf8 >>> runParser_ filenameP)
+cs' & fmap (\x -> C.stripSuffix ".cabal" (filenameFN x) == Just (nameFN x)) & filter not & take 5
+#+end_src
+
+#+RESULTS:
+: []
+
+** uncaught parse errors
+
+#+begin_src haskell-ng :results output
+cfs = latestCabalFields defaultConfig lcs
+Map.size cfs
+#+end_src
+
+#+begin_src haskell-ng :results output :exports both
+lcs' = fmap (second (parseCabalFields defaultConfig)) lcs
+Map.size $ Map.filter (snd >>> isLeft) lcs'
+badParse = Map.filter (isLeft . parseCabalFields defaultConfig . snd) lcs
+Map.size badParse
+Map.keys badParse
+#+end_src
+
+#+RESULTS:
+: 6
+: 6
+: ["DSTM","control-monad-exception-mtl","ds-kanren","metric","phasechange","smartword"]
+
+** sections
+
+*** section count
+
+#+begin_src haskell-ng :results output :exports both
+allcfs = cfs & Map.toList & fmap (snd . snd)
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection >>> length) & count_
+#+end_src
+
+#+RESULTS:
+: fromList [(0,359),(1,2568),(2,5469),(3,5090),(4,2352),(5,1068),(6,503),(7,264),(8,153),(9,107),(10,70),(11,65),(12,32),(13,32),(14,21),(15,22),(16,12),(17,7),(18,14),(19,8),(20,9),(21,5),(22,7),(23,7),(24,5),(25,5),(26,6),(27,2),(28,1),(29,4),(30,1),(32,4),(33,2),(34,4),(35,2),(36,1),(37,4),(38,1),(39,3),(40,2),(41,1),(43,1),(45,1),(46,1),(47,2),(48,2),(51,1),(56,1),(64,1),(66,1),(93,1),(97,1),(98,1),(119,1),(140,1),(295,1)]
+
+*** section types
+
+#+begin_src haskell-ng
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection) & fmap (fmap (view fieldName')) & mconcat & count_ & Map.toList & List.sortOn (Down . snd)
+
+#+end_src
+
+#+RESULTS:
+: [("library",16830),("source-repository",14471),("test-suite",9383),("executable",7547),("flag",4469),("common",3234),("benchmark",1337),("custom-setup",346),("foreign-library",6)]
+
+combinations:
+
+#+begin_src haskell-ng :results output :exports both
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection) & fmap (fmap (view fieldName')) & fmap (filter (not . (flip List.elem) ["source-repository", "custom-setup", "foreign-library", "flag", "common"])) & fmap (count_ >>> Map.toList >>> List.sortOn fst) & count_ & Map.toList & List.sortOn (Down . snd) & take 10
+#+end_src
+
+#+RESULTS:
+: [([("library",1)],7452),([("library",1),("test-suite",1)],4471),([("executable",1),("library",1)],1164),([("executable",1)],1122),([("executable",1),("library",1),("test-suite",1)],980),([("benchmark",1),("library",1),("test-suite",1)],559),([("library",1),("test-suite",2)],432),([],359),([("executable",2),("library",1)],169),([("executable",2),("library",1),("test-suite",1)],138)]
+
+at least 1 combinations:
+
+#+begin_src haskell-ng :results output :exports both
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection) & fmap (fmap (view fieldName')) & fmap (filter (not . (flip List.elem) ["source-repository", "custom-setup", "foreign-library", "flag", "common"])) & fmap (count_ >>> Map.toList >>> fmap fst >>> List.sortOn id) & count_ & Map.toList & List.sortOn (Down . snd) & take 10
+#+end_src
+
+#+RESULTS:
+: [(["library"],7462),(["library","test-suite"],5092),(["executable","library"],1513),(["executable","library","test-suite"],1416),(["executable"],1281),(["benchmark","library","test-suite"],788),([],359),(["benchmark","executable","library","test-suite"],196),(["executable","test-suite"],112),(["benchmark","library"],60)]
+
+*** section in section
+
+#+begin_src haskell-ng :results output :exports both
+sections' = Optics.Extra.to (filter isSection)
+allcfs & fmap (foldOf (#fields % fieldList' % sections' % each % secFields' % sections')) & filter (not . null) & fmap ((fmap (view fieldName'))) & mconcat & count_
+#+end_src
+
+#+RESULTS:
+: fromList [("elif",53),("else",3253),("if",12004),("library",3)]
+
+Embedded libraries are all deprecated.
+
+*** zero-section cfs
+
+Looks like library fields used to be allowed at the top level...
+
+#+begin_src haskell-ng :results output :exports both
+cfs0 = allcfs & toListOf (each % #fields % fieldList') & filter ((==0) . length . (filter isSection))
+length cfs0
+count_ $ cfs0 & fmap (foldOf (field' "build-depends") >>> length)
+cfs00 = cfs0 & filter (foldOf (field' "build-depends") >>> length >>> (==0))
+length cfs00
+#+end_src
+
+#+RESULTS:
+: 359
+: fromList [(0,2),(1,349),(2,7),(4,1)]
+: 2
+
+* fields
+
+#+begin_src haskell-ng :results output
+cfs = latestCabalFields defaultConfig lcs
+Map.size cfs
+#+end_src
+
+#+RESULTS:
+: 18309
+
+#+begin_src haskell-ng :results output :exports both
+lcs' = fmap (second (parseCabalFields defaultConfig)) lcs
+Map.size $ Map.filter (snd >>> isLeft) lcs'
+badParse = Map.filter (isLeft . parseCabalFields defaultConfig . snd) lcs
+Map.size badParse
+Map.keys badParse
+#+end_src
+
+#+RESULTS:
+: 6
+: 6
+: ["DSTM","control-monad-exception-mtl","ds-kanren","metric","phasechange","smartword"]
+
+#+begin_src haskell-ng :results output
+Map.size cfs
+#+end_src
+
+#+RESULTS:
+: 18309
+
+#+begin_src haskell-ng :results output
+vlds = validLibDeps $ fmap snd cfs
+Map.size vlds
+depG = allDepGraph $ fmap snd cfs
+vertexCount depG
+edgeCount depG
+#+end_src
+
+#+RESULTS:
+: 16191
+: 16269
+: 112573
+
+* sections
+** section count
+
+#+begin_src haskell-ng :results output :exports both
+allcfs = cfs & Map.toList & fmap (snd . snd)
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection >>> length) & count_
+#+end_src
+
+#+RESULTS:
+: fromList [(0,359),(1,2568),(2,5469),(3,5090),(4,2352),(5,1068),(6,503),(7,264),(8,153),(9,107),(10,70),(11,65),(12,32),(13,32),(14,21),(15,22),(16,12),(17,7),(18,14),(19,8),(20,9),(21,5),(22,7),(23,7),(24,5),(25,5),(26,6),(27,2),(28,1),(29,4),(30,1),(32,4),(33,2),(34,4),(35,2),(36,1),(37,4),(38,1),(39,3),(40,2),(41,1),(43,1),(45,1),(46,1),(47,2),(48,2),(51,1),(56,1),(64,1),(66,1),(93,1),(97,1),(98,1),(119,1),(140,1),(295,1)]
+
+** section types
+
+#+begin_src haskell-ng
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection) & fmap (fmap (view fieldName')) & mconcat & count_ & Map.toList & List.sortOn (Down . snd)
+
+#+end_src
+
+#+RESULTS:
+: [("library",16830),("source-repository",14471),("test-suite",9383),("executable",7547),("flag",4469),("common",3234),("benchmark",1337),("custom-setup",346),("foreign-library",6)]
+
+combinations:
+
+#+begin_src haskell-ng :results output :exports both
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection) & fmap (fmap (view fieldName')) & fmap (filter (not . (flip List.elem) ["source-repository", "custom-setup", "foreign-library", "flag", "common"])) & fmap (count_ >>> Map.toList >>> List.sortOn fst) & count_ & Map.toList & List.sortOn (Down . snd) & take 10
+#+end_src
+
+#+RESULTS:
+: [([("library",1)],7452),([("library",1),("test-suite",1)],4471),([("executable",1),("library",1)],1164),([("executable",1)],1122),([("executable",1),("library",1),("test-suite",1)],980),([("benchmark",1),("library",1),("test-suite",1)],559),([("library",1),("test-suite",2)],432),([],359),([("executable",2),("library",1)],169),([("executable",2),("library",1),("test-suite",1)],138)]
+
+at least 1 combinations:
+
+#+begin_src haskell-ng :results output :exports both
+allcfs & toListOf (each % #fields % fieldList') & fmap (filter isSection) & fmap (fmap (view fieldName')) & fmap (filter (not . (flip List.elem) ["source-repository", "custom-setup", "foreign-library", "flag", "common"])) & fmap (count_ >>> Map.toList >>> fmap fst >>> List.sortOn id) & count_ & Map.toList & List.sortOn (Down . snd) & take 10
+#+end_src
+
+#+RESULTS:
+: [(["library"],7462),(["library","test-suite"],5092),(["executable","library"],1513),(["executable","library","test-suite"],1416),(["executable"],1281),(["benchmark","library","test-suite"],788),([],359),(["benchmark","executable","library","test-suite"],196),(["executable","test-suite"],112),(["benchmark","library"],60)]
+
+** section in section
+
+#+begin_src haskell-ng :results output :exports both
+sections' = Optics.Extra.to (filter isSection)
+allcfs & fmap (foldOf (#fields % fieldList' % sections' % each % secFields' % sections')) & filter (not . null) & fmap ((fmap (view fieldName'))) & mconcat & count_
+#+end_src
+
+#+RESULTS:
+: fromList [("elif",53),("else",3253),("if",12004),("library",3)]
+
+Embedded libraries are all deprecated.
+
+** zero-section
+
+Looks like library fields used to be allowed at the top level...
+
+#+begin_src haskell-ng :results output :exports both
+cfs0 = allcfs & toListOf (each % #fields % fieldList') & filter ((==0) . length . (filter isSection))
+length cfs0
+count_ $ cfs0 & fmap (foldOf (field' "build-depends") >>> length)
+cfs00 = cfs0 & filter (foldOf (field' "build-depends") >>> length >>> (==0))
+length cfs00
+#+end_src
+
+#+RESULTS:
+: 359
+: fromList [(0,2),(1,349),(2,7),(4,1)]
+: 2
+
+* dependencies
+** Dependency counts
+
+package dependency count:
+
+#+begin_src haskell-ng :results output :exports both
+cfs & fmap (snd >>> libDeps >>> fmap dep >>> List.nub >>> length) & Map.toList & List.sortOn (Down . snd) & take 20
+#+end_src
+
+#+RESULTS:
+: [("acme-everything",7533),("yesod-platform",132),("planet-mitchell",109),("haskell-language-server",81),("cachix",77),("btc-lsp",71),("pandoc",71),("freckle-app",70),("too-many-cells",70),("ghcide",65),("sprinkles",65),("pantry-tmp",64),("NGLess",60),("project-m36",59),("stack",59),("espial",58),("hermes",58),("taffybar",57),("futhark",56),("purescript",56)]
+
+dependency count:
+
+#+begin_src haskell-ng :results output :exports both
+cfs & fmap (snd >>> libDeps >>> fmap dep >>> List.nub) & Map.toList & fmap snd & mconcat & count_ & Map.toList & List.sortOn (snd >>> Down) & take 40
+#+end_src
+
+#+RESULTS:
+: [("base",15283),("bytestring",5653),("text",5282),("containers",4992),("mtl",3602),("transformers",3181),("aeson",2163),("time",2064),("vector",1888),("directory",1658),("filepath",1588),("template-haskell",1554),("unordered-containers",1441),("deepseq",1307),("lens",1233),("hashable",973),("binary",960),("array",923),("exceptions",910),("process",880),("stm",869),("random",848),("http-types",840),("attoparsec",811),("network",782),("parsec",766),("data-default",662),("QuickCheck",621),("http-client",535),("conduit",520),("primitive",505),("async",492),("split",477),("ghc-prim",463),("scientific",443),("monad-control",427),("semigroups",420),("wai",415),("resourcet",410),("unix",407)]
+
+** algebraic-graphs
+
+
+Creating a graph of all dependencies:
+
+#+begin_src haskell-ng :results output
+vlds = validLibDeps $ fmap snd cfs
+Map.size vlds
+depG = allDepGraph $ fmap snd cfs
+vertexCount depG
+edgeCount depG
+#+end_src
+
+#+RESULTS:
+: 16191
+: 16269
+: 112573
+
+=text= package dependency example
+
+#+begin_src haskell-ng
+supers = upstreams "text" depG <> Set.singleton "text"
+superG = induce (`elem` (Data.Foldable.toList supers)) depG
+#+end_src
+
+#+RESULTS:
+
+#+begin_src haskell-ng :results output :exports both
+supers
+#+end_src
+
+#+RESULTS:
+: fromList ["array","binary","bytestring","deepseq","ghc-prim","template-haskell","text"]
+
+
+#+begin_src haskell-ng :file other/textdeps.svg :results output graphics file :exports results
+ baseGraph = defaultGraph & attL GraphType (ID "size") .~ Just (IDQuoted "5!") & attL NodeType (ID "shape") .~ Just (ID "box") & attL NodeType (ID "height") .~ Just (ID 2) & gattL (ID "rankdir") .~ Just (IDQuoted "TB")
+ g = toDotGraphWith Directed baseGraph superG
+ processDotWith Directed ["-Tsvg", "-oother/textdeps.svg"] (dotPrint defaultDotConfig g)
+ BS.writeFile "other/textdeps.dot" (dotPrint defaultDotConfig g)
+ #+end_src
+
+#+RESULTS:
+[[file:other/textdeps.svg]]
+
+** version ranges
+
+#+begin_src haskell-ng :results output
+mVersions = Map.fromListWith (<>) $ ((\x -> (nameFN x, (:[]) $ ((simpleParsecBS :: ByteString -> Maybe Version) $ versionFN x))) . fst) <$> cs
+
+Map.size mVersions
+
+#+end_src
+
+#+RESULTS:
+: 18315
+
+#+begin_src haskell-ng :results output :exports both
+(Just x1) = Map.lookup "chart-svg" mVersions
+x1
+minimum x1
+maximum x1
+#+end_src
+
+#+RESULTS:
+: [Just (mkVersion [0,8,0,3]),Just (mkVersion [0,8,0,2]),Just (mkVersion [0,8,0,1]),Just (mkVersion [0,8,0,0]),Just (mkVersion [0,7,0,0]),Just (mkVersion [0,6,1,0]),Just (mkVersion [0,6,0,0]),Just (mkVersion [0,5,2,0]),Just (mkVersion [0,5,1,1]),Just (mkVersion [0,5,1,0]),Just (mkVersion [0,5,0,0]),Just (mkVersion [0,4,1,1]),Just (mkVersion [0,4,1,0]),Just (mkVersion [0,4,0]),Just (mkVersion [0,3,3]),Just (mkVersion [0,3,2]),Just (mkVersion [0,3,1]),Just (mkVersion [0,3,0]),Just (mkVersion [0,2,3]),Just (mkVersion [0,2,2]),Just (mkVersion [0,2,1]),Just (mkVersion [0,2,0]),Just (mkVersion [0,1,3]),Just (mkVersion [0,1,2]),Just (mkVersion [0,1,1]),Just (mkVersion [0,1,0]),Just (mkVersion [0,0,3]),Just (mkVersion [0,0,2]),Just (mkVersion [0,0,1])]
+: Just (mkVersion [0,0,1])
+: Just (mkVersion [0,8,0,3])
+
+*** all versions are unique?
+
+#+begin_src haskell-ng :results output :exports both
+take 10 $ Map.toList $ Map.filter (\a -> length a /= length (List.nub a)) mVersions
+#+end_src
+
+#+RESULTS:
+: []
+
+*** Version counts
+
+#+begin_src haskell-ng :results output :exports both
+take 10 $ List.sortOn (Down . snd) $ Map.toList $ Map.map length mVersions
+#+end_src
+
+#+RESULTS:
+: [("haskoin-store",319),("git-annex",299),("hlint",223),("yesod-core",218),("warp",213),("pandoc",211),("purescript",205),("hakyll",198),("persistent",194),("egison",190)]
+
+* references
+
+https://cabal.readthedocs.io/en/stable/
