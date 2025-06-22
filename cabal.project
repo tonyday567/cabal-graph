@@ -1,5 +1,4 @@
 packages:
   cabal-graph.cabal
-  ../cabal-fix/cabal-fix.cabal
 
 write-ghc-environment-files: always

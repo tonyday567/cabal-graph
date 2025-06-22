@@ -25,7 +25,7 @@ import Data.Set qualified as Set
 import Distribution.Parsec
 import Distribution.Version
 import DotParse qualified as Dot
-import FlatParse.Basic (Parser, Result(..))
+import FlatParse.Basic (Parser, Result (..))
 import FlatParse.Basic qualified as FP
 import GHC.Generics
 import Optics.Extra
@@ -76,22 +76,24 @@ runParserEither p bs = case runParser p bs of
 -- | tar files represented by path and content
 tarContent :: [Tar.Entry] -> [(FilePath, BSL.ByteString)]
 tarContent es =
-  [(fp, bs) | (fp, Tar.NormalFile bs _) <-
-   (\e -> (Tar.entryPath e, Tar.entryContent e)) <$> es]
+  [ (fp, bs)
+  | (fp, Tar.NormalFile bs _) <-
+      (\e -> (Tar.entryPath e, Tar.entryContent e)) <$> es
+  ]
 
 isPackageJson :: FilePath -> Bool
-isPackageJson = either (const (error "bad filename parse") True) id . fmap (=="package.json") . fmap filenameFN . runParserEither filenameP . FP.strToUtf8
+isPackageJson = either (error "bad filename parse") ((== "package.json") . filenameFN) . runParserEither filenameP . FP.strToUtf8
 
 isPreferredVersion :: FilePath -> Bool
 isPreferredVersion = List.isSuffixOf "preferred-versions"
 
 entryCounts :: [FilePath] -> [(String, Int)]
 entryCounts xs =
-  [ ("total entries", allentries)
-  , ("preferred-versions", pvs)
-  , ("package.json", pjs)
-  , ("overwritten", overwritten)
-  , ("unique", unique)
+  [ ("total entries", allentries),
+    ("preferred-versions", pvs),
+    ("package.json", pjs),
+    ("overwritten", overwritten),
+    ("unique", unique)
   ]
   where
     xs' = xs & filter (isPreferredVersion >>> not)
