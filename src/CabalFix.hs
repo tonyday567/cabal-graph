@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultilineStrings #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -90,7 +91,6 @@ import Data.Functor.Identity
 import Data.List qualified as List
 import Data.Map.Strict qualified as Map
 import Data.Maybe
-import Data.String.Interpolate
 import Data.Vector qualified as V
 import Distribution.Fields
 import Distribution.Fields.Field
@@ -966,7 +966,7 @@ addc comments (x : xs) tag fs = take x fs <> [f'] <> drop (x + 1) fs
 -- > mkdir minimal && cd minimal && cabal init --minimal --simple --overwrite --lib --tests --language=GHC2021 --license=BSD-2-Clause  -p minimal
 minimalExampleBS :: ByteString
 minimalExampleBS =
-  [i|cabal-version:   3.0
+  """cabal-version:   3.0
 name:            minimal
 version:         0.1.0.0
 license:         BSD-2-Clause
@@ -992,7 +992,7 @@ test-suite minimal-test
     main-is:          Main.hs
     build-depends:
         base ^>=4.17.2.1,
-        minimal|]
+        minimal"""
 
 -- | A config close to the @cabal init@ styles.
 minimalConfig :: Config
