@@ -98,7 +98,7 @@ import Distribution.Parsec
 import Distribution.Pretty
 import Distribution.Utils.Generic
 import Distribution.Version
-import FlatParse.Basic hiding (take)
+import CabalParse hiding (take)
 import GHC.Generics hiding (to)
 import Optics.Extra
 import Text.PrettyPrint qualified as PP
@@ -112,7 +112,6 @@ import Prelude
 -- >>> import CabalFix
 -- >>> import Optics.Extra
 -- >>> import Data.ByteString.Char8 qualified as C
--- >>> import FlatParse.Basic (Result(..))
 -- >>> bs = minimalExampleBS
 -- >>> cfg = defaultConfig
 -- >>> (Just cf) = preview (cabalFields' cfg) bs
@@ -1148,7 +1147,7 @@ depP =
     <*> nota ','
     <* optional postfixComma
   where
-    nota c = withSpan (skipMany (satisfy (/= c))) (\() s -> unsafeSpanToByteString s)
+    nota c = byteStringOf (skipMany (satisfy (/= c)))
 
 -- | A single digit
 digit :: Parser e Int
@@ -1164,7 +1163,7 @@ int = do
 
 -- | Parse a version bytestring to an int list.
 versionP :: Parser e [Int]
-versionP = (:) <$> int <*> many ($(char '.') >> int)
+versionP = (:) <$> int <*> many (char '.' >> int)
 
 initialPackageChar :: Parser e Char
 initialPackageChar =
@@ -1193,21 +1192,12 @@ validName :: Parser e String
 validName = (:) <$> initialPackageChar <*> many packageChar
 
 prefixComma :: Parser e ()
-prefixComma = $(char ',') >> ws_
+prefixComma = char ',' >> ws_
 
 postfixComma :: Parser e ()
-postfixComma = ws_ >> $(char ',')
+postfixComma = ws_ >> char ','
 
 ws_ :: Parser e ()
-ws_ =
-  $( switch
-       [|
-         case _ of
-           " " -> ws_
-           "\n" -> ws_
-           "\t" -> ws_
-           "\r" -> ws_
-           "\f" -> ws_
-           _ -> pure ()
-         |]
-   )
+ws_ = go
+  where
+    go = (satisfy (`C.elem` " \n\t\r\f") >> go) <|> pure ()

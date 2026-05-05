@@ -25,8 +25,7 @@ import Data.Set qualified as Set
 import Distribution.Parsec
 import Distribution.Version
 import DotParse qualified as Dot
-import FlatParse.Basic (Parser, Result (..))
-import FlatParse.Basic qualified as FP
+import CabalParse (Parser, Result (..), runParser, satisfy, skipMany, byteStringOf, takeRest, strToUtf8, many)
 import GHC.Generics
 import Optics.Extra
 import System.Directory
@@ -47,24 +46,24 @@ tarEntries = entryList . Tar.read <$> (BSL.readFile =<< cabalIndex)
 data FileName = FileName {nameFN :: ByteString, versionFN :: ByteString, filenameFN :: ByteString} deriving (Generic, Eq, Ord, Show)
 
 runParser_ :: Parser String a -> ByteString -> a
-runParser_ p bs = case FP.runParser p bs of
+runParser_ p bs = case runParser p bs of
   Err e -> error e
   OK a _ -> a
   Fail -> error "uncaught parse error"
 
 nota :: Char -> Parser e ByteString
-nota c = FP.withSpan (FP.skipMany (FP.satisfy (/= c))) (\() s -> FP.unsafeSpanToByteString s)
+nota c = byteStringOf (skipMany (satisfy (/= c)))
 
 untilP :: Char -> Parser e ByteString
-untilP c = nota c <* FP.satisfy (== c)
+untilP c = nota c <* satisfy (== c)
 
 -- | Convert a ByteString to a FileName. Errors on failure.
 filename :: ByteString -> FileName
 filename = runParser_ filenameP
 
 -- | FileName parser
-filenameP :: FP.Parser e FileName
-filenameP = FileName <$> untilP '/' <*> untilP '/' <*> FP.takeRest
+filenameP :: Parser e FileName
+filenameP = FileName <$> untilP '/' <*> untilP '/' <*> takeRest
 
 -- | Run a Parser, throwing away leftovers. Returns Left on 'Fail' or 'Err'.
 runParserEither :: Parser ByteString a -> ByteString -> Either ByteString a
@@ -82,7 +81,7 @@ tarContent es =
   ]
 
 isPackageJson :: FilePath -> Bool
-isPackageJson = either (error "bad filename parse") ((== "package.json") . filenameFN) . runParserEither filenameP . FP.strToUtf8
+isPackageJson = either (error "bad filename parse") ((== "package.json") . filenameFN) . runParserEither filenameP . strToUtf8
 
 isPreferredVersion :: FilePath -> Bool
 isPreferredVersion = List.isSuffixOf "preferred-versions"
@@ -113,7 +112,7 @@ entryCounts xs =
 -- - package.json entries
 -- - preferred-version entries
 cabals :: [Tar.Entry] -> [(FileName, BSL.ByteString)]
-cabals xs = xs & tarContent & filter (fst >>> isPreferredVersion >>> not) & filter (fst >>> isPackageJson >>> not) & fmap (first (FP.strToUtf8 >>> runParser_ filenameP)) & Map.fromList & Map.toList
+cabals xs = xs & tarContent & filter (fst >>> isPreferredVersion >>> not) & filter (fst >>> isPackageJson >>> not) & fmap (first (strToUtf8 >>> runParser_ filenameP)) & Map.fromList & Map.toList
 
 -- | Assumes cabal entries are in chronological order and that the last version encountered is the
 -- latest valid one.
@@ -135,12 +134,12 @@ libDeps cf = deps
   where
     libFields = cf & foldOf (#fields % fieldList' % section' "library" % each % secFields')
     libBds = libFields & foldOf (fieldValues' "build-depends")
-    libDeps' = runParser_ (FP.many depP) libBds
+    libDeps' = runParser_ (many depP) libBds
     libImports = libFields & toListOf (fieldValues' "import")
     cs = cf & foldOf (#fields % fieldList' % section' "common")
     libCommons = cs & filter (all (`elem` libImports) . toListOf (secArgs' % each % secArgBS' % _2))
     commonsBds = libCommons & foldOf (fieldValues' "build-depends")
-    commonsDeps = runParser_ (FP.many depP) commonsBds
+    commonsDeps = runParser_ (many depP) commonsBds
     deps = fmap (uncurry Dep) (libDeps' <> commonsDeps)
 
 -- | Map of valid dependencies
