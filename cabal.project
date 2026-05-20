@@ -1,23 +1,8 @@
 packages:
   cabal-graph.cabal
-  ../dotparse/dotparse.cabal
-
-source-repository-package
-  type: git
-  location: https://github.com/snowleopard/alga.git
-  branch: main
 
 write-ghc-environment-files: always
-allow-newer: indexed-traversable:base
-allow-newer: indexed-traversable-instances:base
-allow-newer: dotparse:base
-allow-newer: dotparse:template-haskell
-allow-newer: these:base
-allow-newer: dotparse:string-interpolate
-allow-newer: string-interpolate:template-haskell
-allow-newer: tdigest:base
-allow-newer: microlens-th:template-haskell
-allow-newer: cabal-graph:containers
-allow-newer: abal-syntax:containers
-allow-newer: abal-syntax:containers
-allow-newer: *:*
+
+allow-newer:
+  string-interpolate:template-haskell,
+  tdigest:base
