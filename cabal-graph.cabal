@@ -14,8 +14,8 @@ description:
 
 build-type: Simple
 tested-with:
-  ghc ==9.6.5
-  ghc ==9.8.2
+  ghc ==9.14.1
+  ghc ==9.12.2
   ghc ==9.10.1
 
 extra-doc-files:
@@ -44,7 +44,7 @@ common ghc-options-stanza
     -Wredundant-constraints
 
 common ghc2021-stanza
-  default-language: GHC2021
+  default-language: GHC2024
 
 library
   import: ghc-options-stanza

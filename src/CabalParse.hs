@@ -32,7 +32,6 @@ module CabalParse
     eof,
     lookahead,
     branch,
-    getPos,
 
     -- * Character classes
     isDigit,
@@ -76,7 +75,7 @@ import Control.Monad (MonadPlus (..), ap, void)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as B
 import Data.ByteString.Char8 qualified as BC
-import Data.Char (chr, isAsciiLower, isAsciiUpper, isDigit, ord)
+import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.Word (Word8)
 import Prelude hiding (replicate)
 
@@ -106,7 +105,7 @@ instance Monad (Parser e) where
     Err e -> Err e
 
 instance Alternative (Parser e) where
-  empty = Parser $ \_ -> Fail
+  empty = Parser $ const Fail
   Parser p <|> Parser q = Parser $ \s -> case p s of
     Fail -> q s
     ok -> ok
@@ -305,24 +304,15 @@ ws :: Parser e ()
 ws = go
   where
     go =
-      ( char ' ' *> ws
-      )
-        <|> ( char '\\' *> char '\n' *> ws
-            )
-        <|> ( char '\\' *> char '\\' *> char '\\' *> char '\n' *> ws
-            )
-        <|> ( char '\n' *> ws
-            )
-        <|> ( char '\t' *> ws
-            )
-        <|> ( char '\r' *> ws
-            )
-        <|> ( char ';' *> ws
-            )
-        <|> ( string "//" *> lineComment
-            )
-        <|> ( string "/*" *> multilineComment
-            )
+      (char ' ' *> ws)
+        <|> (char '\\' *> char '\n' *> ws)
+        <|> (char '\\' *> char '\\' *> char '\\' *> char '\n' *> ws)
+        <|> (char '\n' *> ws)
+        <|> (char '\t' *> ws)
+        <|> (char '\r' *> ws)
+        <|> (char ';' *> ws)
+        <|> (string "//" *> lineComment)
+        <|> (string "/*" *> multilineComment)
         <|> pure ()
 
 lineComment :: Parser e ()
@@ -340,10 +330,8 @@ multilineComment = go (1 :: Int)
   where
     go 0 = ws
     go n =
-      ( string "*/" *> go (n - 1)
-      )
-        <|> ( string "/*" *> go (n + 1)
-            )
+      (string "*/" *> go (n - 1))
+        <|> (string "/*" *> go (n + 1))
         <|> branch anyWord8 (go n) (pure ())
 
 token :: Parser e a -> Parser e a

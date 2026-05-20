@@ -3,8 +3,6 @@
 {-# LANGUAGE MultilineStrings #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
@@ -77,6 +75,7 @@ module CabalFix
   )
 where
 
+import CabalParse
 import Control.Category ((>>>))
 import Control.Monad
 import Data.Bifunctor
@@ -98,7 +97,6 @@ import Distribution.Parsec
 import Distribution.Pretty
 import Distribution.Utils.Generic
 import Distribution.Version
-import CabalParse hiding (take)
 import GHC.Generics hiding (to)
 import Optics.Extra
 import Text.PrettyPrint qualified as PP
@@ -966,32 +964,32 @@ addc comments (x : xs) tag fs = take x fs <> [f'] <> drop (x + 1) fs
 minimalExampleBS :: ByteString
 minimalExampleBS =
   """cabal-version:   3.0
-name:            minimal
-version:         0.1.0.0
-license:         BSD-2-Clause
-license-file:    LICENSE
-build-type:      Simple
-extra-doc-files: CHANGELOG.md
+  name:            minimal
+  version:         0.1.0.0
+  license:         BSD-2-Clause
+  license-file:    LICENSE
+  build-type:      Simple
+  extra-doc-files: CHANGELOG.md
 
-common warnings
-    ghc-options: -Wall
+  common warnings
+      ghc-options: -Wall
 
-library
-    import:           warnings
-    exposed-modules:  MyLib
-    build-depends:    base ^>=4.17.2.1
-    hs-source-dirs:   src
-    default-language: GHC2021
+  library
+      import:           warnings
+      exposed-modules:  MyLib
+      build-depends:    base ^>=4.17.2.1
+      hs-source-dirs:   src
+      default-language: GHC2021
 
-test-suite minimal-test
-    import:           warnings
-    default-language: GHC2021
-    type:             exitcode-stdio-1.0
-    hs-source-dirs:   test
-    main-is:          Main.hs
-    build-depends:
-        base ^>=4.17.2.1,
-        minimal"""
+  test-suite minimal-test
+      import:           warnings
+      default-language: GHC2021
+      type:             exitcode-stdio-1.0
+      hs-source-dirs:   test
+      main-is:          Main.hs
+      build-depends:
+          base ^>=4.17.2.1,
+          minimal"""
 
 -- | A config close to the @cabal init@ styles.
 minimalConfig :: Config

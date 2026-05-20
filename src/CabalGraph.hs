@@ -9,6 +9,7 @@ module CabalGraph where
 import Algebra.Graph
 import Algebra.Graph.ToGraph qualified as ToGraph
 import CabalFix
+import CabalParse (Parser, Result (..), byteStringOf, many, satisfy, skipMany, strToUtf8, takeRest)
 import Codec.Archive.Tar qualified as Tar
 import Control.Category ((>>>))
 import Data.Bifunctor
@@ -25,7 +26,6 @@ import Data.Set qualified as Set
 import Distribution.Parsec
 import Distribution.Version
 import DotParse qualified as Dot
-import CabalParse (Parser, Result (..), runParser, satisfy, skipMany, byteStringOf, takeRest, strToUtf8, many)
 import GHC.Generics
 import Optics.Extra
 import System.Directory
