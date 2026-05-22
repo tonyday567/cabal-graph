@@ -14,9 +14,8 @@ description:
 
 build-type: Simple
 tested-with:
-  ghc ==9.14.1
+  ghc ==9.14.1,
   ghc ==9.12.2
-  ghc ==9.10.1
 
 extra-doc-files:
   ChangeLog.md
@@ -67,3 +66,19 @@ library
     CabalFix
     CabalGraph
     CabalParse
+
+executable eco
+  import: ghc-options-stanza
+  import: ghc2021-stanza
+  hs-source-dirs: app
+  main-is: eco.hs
+  build-depends:
+    base >=4.14 && <5,
+    bytestring >=0.11 && <0.13,
+    cabal-graph,
+    containers >=0.6 && <0.9,
+    directory >=1.3 && <1.4,
+    dotparse >=0.1 && <0.2,
+    filepath >=1.4 && <1.6,
+    optics >=0.4 && <0.5,
+    algebraic-graphs >=0.7 && <0.9,
